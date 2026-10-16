@@ -326,7 +326,7 @@ func StartServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Starting Factorio server with settings: %v", string(body))
+	log.Println("Received Factorio start request")
 
 	err = json.Unmarshal(body, &server)
 	if err != nil {
@@ -737,7 +737,7 @@ func UpdateServerSettings(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	log.Printf("Received settings JSON: %s", body)
+	log.Println("Received server settings update")
 	var server = factorio.GetFactorioServer()
 
 	// Race Condition while unmarshal possible

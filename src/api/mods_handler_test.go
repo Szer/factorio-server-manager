@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"flag"
 	"io"
 	"log"
 	"mime/multipart"
@@ -21,6 +22,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	flag.Parse()
 	var err error
 
 	err = godotenv.Load("../.env")
@@ -48,7 +50,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error loading factorio credentials: %s", err)
 		return
 	}
-	if !load {
+	if !load && !testing.Short() {
 		// no credentials found, login...
 		err, _ = factorio.FactorioLogin(os.Getenv("factorio_username"), os.Getenv("factorio_password"))
 		if err != nil {

@@ -71,8 +71,8 @@ func CreateSave(filePath string) (string, error) {
 		return "", err
 	}
 
-	args := []string{"--create", filePath}
 	config := bootstrap.GetConfig()
+	args := []string{"--create", filePath, "--config", config.FactorioConfigFile, "--mod-directory", config.FactorioModsDir}
 	cmdOutput, err := exec.Command(config.FactorioBinary, args...).Output()
 	if err != nil {
 		log.Printf("Error in creating Factorio save: %s", err)

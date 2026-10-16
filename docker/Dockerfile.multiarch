@@ -1,0 +1,28 @@
+ARG GAME_IMAGE=debian:trixie-slim
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS frontend
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY ui ./ui
+COPY app ./app
+COPY webpack.config.js tailwind.config.js ./
+RUN npm run build
+
+FROM --platform=$BUILDPLATFORM golang:1.26 AS backend
+ARG TARGETARCH
+WORKDIR /src
+COPY src/go.mod src/go.sum ./
+RUN go mod download
+COPY src ./
+RUN gofmt -w main.go bootstrap/config.go bootstrap/user.go api/auth.go api/handlers.go factorio/server.go factorio/server_linux.go factorio/saves.go \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -trimpath -o /out/factorio-server-manager .
+
+FROM ${GAME_IMAGE}
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/fsm
+COPY --from=backend /out/factorio-server-manager ./
+COPY --from=frontend /src/app ./app
+EXPOSE 8080
+ENTRYPOINT ["/opt/fsm/factorio-server-manager"]
