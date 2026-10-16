@@ -5,6 +5,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/OpenFactorioServerManager/factorio-server-manager/bootstrap"
 	"github.com/glebarez/sqlite"
@@ -57,7 +60,24 @@ func SetupAuth() {
 
 	if userCount == 0 {
 		// no user created yet, create a default one
-		var password = bootstrap.GenerateRandomPassword()
+		var password string
+		passwordFile := os.Getenv("FSM_ADMIN_PASSWORD_FILE")
+		if passwordFile != "" {
+			value, err := os.ReadFile(passwordFile)
+			if err != nil {
+				log.Fatal("Cannot read initial admin password file")
+			}
+			password = strings.TrimSpace(string(value))
+			if len(password) < 12 {
+				log.Fatal("Initial admin password must contain at least 12 characters")
+			}
+		} else {
+			password = bootstrap.GenerateRandomPassword()
+			passwordFile = filepath.Join(filepath.Dir(config.ConfFile), "bootstrap-admin-password")
+			if err := os.WriteFile(passwordFile, []byte(password+"\n"), 0600); err != nil {
+				log.Fatal("Cannot write initial admin password file")
+			}
+		}
 
 		var user User
 		user.Username = "admin"
@@ -72,7 +92,7 @@ func SetupAuth() {
 
 		log.Println("Created default admin user. Please change it's password as soon as possible.")
 		log.Printf("Username: %s", user.Username)
-		log.Printf("Password: %s", password)
+		log.Printf("Initial admin password is stored in %s", passwordFile)
 	}
 }
 

@@ -253,8 +253,12 @@ func (server *Server) Run() error {
 		"--bind", server.BindIP,
 		"--port", strconv.Itoa(server.Port),
 		"--server-settings", config.SettingsFile,
+		"--config", config.FactorioConfigFile,
+		"--mod-directory", config.FactorioModsDir,
 		"--rcon-port", strconv.Itoa(config.FactorioRconPort),
 		"--rcon-password", config.FactorioRconPass)
+
+	args = append(args, config.FactorioExtraArgs...)
 
 	if (server.Version.Greater(Version{0, 17, 0})) {
 		args = append(args, "--server-adminlist", config.FactorioAdminFile)
@@ -272,10 +276,10 @@ func (server *Server) Run() error {
 	}
 
 	if config.GlibcCustom == "true" {
-		log.Println("Starting server with command: ", config.GlibcLocation, args)
+		log.Println("Starting Factorio with custom glibc")
 		server.Cmd = exec.Command(config.GlibcLocation, args...)
 	} else {
-		log.Println("Starting server with command: ", config.FactorioBinary, args)
+		log.Println("Starting Factorio")
 		server.Cmd = exec.Command(config.FactorioBinary, args...)
 	}
 

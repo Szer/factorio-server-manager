@@ -1,4 +1,5 @@
 // use this file only when compiling not windows (all unix systems)
+//go:build !windows
 // +build !windows
 
 package factorio
@@ -23,6 +24,9 @@ func (server *Server) Kill() error {
 	server.SetRunning(false)
 	log.Printf("Sent SIGKILL to Factorio process. Factorio forced to exit.")
 
+	if server.Rcon == nil {
+		return nil
+	}
 	err = server.Rcon.Close()
 	if err != nil {
 		log.Printf("Error close rcon connection: %s", err)
@@ -43,6 +47,9 @@ func (server *Server) Stop() error {
 	}
 	log.Printf("Sent SIGINT to Factorio process. Factorio shutting down...")
 
+	if server.Rcon == nil {
+		return nil
+	}
 	err = server.Rcon.Close()
 	if err != nil {
 		log.Printf("Error close rcon connection: %s", err)
