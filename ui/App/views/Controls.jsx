@@ -7,6 +7,7 @@ import {useForm} from "react-hook-form";
 import Select from "../components/Select";
 import Input from "../components/Input";
 import Error from "../components/Error";
+import UPSChart from "../components/UPSChart";
 
 const Controls = ({serverStatus}) => {
 
@@ -46,6 +47,7 @@ const Controls = ({serverStatus}) => {
     }, [])
 
     return (
+        <>
         <form onSubmit={handleSubmit(startServer)}>
         <Panel
             title="Server Status"
@@ -136,6 +138,8 @@ const Controls = ({serverStatus}) => {
             }
         />
         </form>
+        <UPSChart running={serverStatus.running}/>
+        </>
     )
 };
 

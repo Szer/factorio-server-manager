@@ -33,38 +33,40 @@ type Flags struct {
 }
 
 type Config struct {
-	FactorioDir             string   `json:"factorio_dir,omitempty"`
-	FactorioSavesDir        string   `json:"saves_dir,omitempty"`
-	FactorioBaseModDir      string   `json:"basemod_dir,omitempty"`
-	FactorioModsDir         string   `json:"mods_dir,omitempty"`
-	FactorioModPackDir      string   `json:"mod_pack_dir,omitempty"`
-	FactorioConfigFile      string   `json:"config_file,omitempty"`
-	FactorioConfigDir       string   `json:"config_directory,omitempty"`
-	FactorioLog             string   `json:"logfile,omitempty"`
-	FactorioBinary          string   `json:"factorio_binary,omitempty"`
-	FactorioExtraArgs       []string `json:"factorio_extra_args,omitempty"`
-	FactorioRconPort        int      `json:"rcon_port,omitempty"`
-	FactorioRconPass        string   `json:"rcon_pass,omitempty"`
-	FactorioCredentialsFile string   `json:"factorio_credentials_file,omitempty"`
-	FactorioIP              string   `json:"factorio_ip,omitempty"`
-	FactorioAdminFile       string   `json:"factorio_admin_file,omitempty"`
-	ServerIP                string   `json:"server_ip,omitempty"`
-	ServerPort              string   `json:"server_port,omitempty"`
-	MaxUploadSize           int64    `json:"max_upload_size,omitempty"`
-	DatabaseFile            string   `json:"database_file,omitempty"`
-	SQLiteDatabaseFile      string   `json:"sq_lite_database_file,omitempty"`
-	CookieEncryptionKey     string   `json:"cookie_encryption_key,omitempty"`
-	SettingsFile            string   `json:"settings_file,omitempty"`
-	LogFile                 string   `json:"log_file,omitempty"`
-	ConfFile                string   `json:"-"`
-	GlibcCustom             string   `json:"-"`
-	GlibcLocation           string   `json:"-"`
-	GlibcLibLoc             string   `json:"-"`
-	Autostart               string   `json:"-"`
-	ConsoleCacheSize        int      `json:"console_cache_size,omitempty"` // the amount of cached lines, inside the factorio output cache
-	ConsoleLogFile          string   `json:"console_log_file,omitempty"`
-	ChatLogFile             string   `json:"chat_log_file,omitempty"` // separate log file for chat (incl join/quit)
-	Secure                  bool     `json:"secure"`                  // set to `false` to use this tool without SSL/TLS (Default: `true`)
+	PrometheusURL           string            `json:"prometheus_url,omitempty"`
+	TelemetryLabels         map[string]string `json:"telemetry_labels,omitempty"`
+	FactorioDir             string            `json:"factorio_dir,omitempty"`
+	FactorioSavesDir        string            `json:"saves_dir,omitempty"`
+	FactorioBaseModDir      string            `json:"basemod_dir,omitempty"`
+	FactorioModsDir         string            `json:"mods_dir,omitempty"`
+	FactorioModPackDir      string            `json:"mod_pack_dir,omitempty"`
+	FactorioConfigFile      string            `json:"config_file,omitempty"`
+	FactorioConfigDir       string            `json:"config_directory,omitempty"`
+	FactorioLog             string            `json:"logfile,omitempty"`
+	FactorioBinary          string            `json:"factorio_binary,omitempty"`
+	FactorioExtraArgs       []string          `json:"factorio_extra_args,omitempty"`
+	FactorioRconPort        int               `json:"rcon_port,omitempty"`
+	FactorioRconPass        string            `json:"rcon_pass,omitempty"`
+	FactorioCredentialsFile string            `json:"factorio_credentials_file,omitempty"`
+	FactorioIP              string            `json:"factorio_ip,omitempty"`
+	FactorioAdminFile       string            `json:"factorio_admin_file,omitempty"`
+	ServerIP                string            `json:"server_ip,omitempty"`
+	ServerPort              string            `json:"server_port,omitempty"`
+	MaxUploadSize           int64             `json:"max_upload_size,omitempty"`
+	DatabaseFile            string            `json:"database_file,omitempty"`
+	SQLiteDatabaseFile      string            `json:"sq_lite_database_file,omitempty"`
+	CookieEncryptionKey     string            `json:"cookie_encryption_key,omitempty"`
+	SettingsFile            string            `json:"settings_file,omitempty"`
+	LogFile                 string            `json:"log_file,omitempty"`
+	ConfFile                string            `json:"-"`
+	GlibcCustom             string            `json:"-"`
+	GlibcLocation           string            `json:"-"`
+	GlibcLibLoc             string            `json:"-"`
+	Autostart               string            `json:"-"`
+	ConsoleCacheSize        int               `json:"console_cache_size,omitempty"` // the amount of cached lines, inside the factorio output cache
+	ConsoleLogFile          string            `json:"console_log_file,omitempty"`
+	ChatLogFile             string            `json:"chat_log_file,omitempty"` // separate log file for chat (incl join/quit)
+	Secure                  bool              `json:"secure"`                  // set to `false` to use this tool without SSL/TLS (Default: `true`)
 }
 
 // set Configs default values. JSON unmarshal will replace when it found something different
