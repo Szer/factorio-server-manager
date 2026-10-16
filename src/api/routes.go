@@ -20,6 +20,16 @@ type Routes []Route
 
 func ServerOffMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Run owns the lock for the process lifetime; other mutations own it for the request.
+		if r.URL.Path != "/api/server/start" {
+			if !factorio.GameFilesMu.TryLock() {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusLocked)
+				WriteResponse(w, "Stop the server and wait for other file operations to finish.")
+				return
+			}
+			defer factorio.GameFilesMu.Unlock()
+		}
 		// only run if server is turned off
 		server := factorio.GetFactorioServer()
 		if server.GetRunning() {
@@ -135,6 +145,8 @@ func NewRouter() *mux.Router {
 // Defines all API REST endpoints
 // All routes are prefixed with /api
 var apiRoutes = Routes{
+	{"StartupSettings", "GET", "/mods/startup-settings", GetStartupSettings, false},
+	{"SaveStartupSettings", "POST", "/mods/startup-settings", SaveStartupSettings, true},
 	{
 		"ListSaves",
 		"GET",
