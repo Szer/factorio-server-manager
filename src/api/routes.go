@@ -145,6 +145,7 @@ func NewRouter() *mux.Router {
 // Defines all API REST endpoints
 // All routes are prefixed with /api
 var apiRoutes = Routes{
+	{"UPSHistory", "GET", "/server/ups", UPSHistory, false},
 	{"StartupSettings", "GET", "/mods/startup-settings", GetStartupSettings, false},
 	{"SaveStartupSettings", "POST", "/mods/startup-settings", SaveStartupSettings, true},
 	{

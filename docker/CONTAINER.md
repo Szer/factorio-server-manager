@@ -33,3 +33,15 @@ runtime sections and the version header are preserved. Original files are backed
 up by SHA-256 under `mods/.startup-settings-backups` before atomic replacement.
 To restore one, stop the game, copy the desired backup locally as
 `mod-settings.dat`, and use Mods → Upload Mod.
+
+## UPS history
+
+The Controls page shows actual/target UPS, players and the last five minutes of
+history, refreshed every ten seconds. Configure `prometheus_url` and optional
+`telemetry_labels` in the manager JSON to select one Factorio exporter. The
+exporter must provide `factorio_ups`, `factorio_target_ups`, `factorio_players`,
+`factorio_paused`, `factorio_rcon_up` and `factorio_sample_timestamp_seconds`.
+
+The authenticated `/api/server/ups` endpoint issues a fixed, bounded range query;
+browsers do not connect directly to Prometheus. Paused, disconnected, stale and
+missing samples leave gaps. The average includes only valid active samples.
