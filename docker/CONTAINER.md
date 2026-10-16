@@ -18,3 +18,18 @@ password of at least 12 characters. Without it, a cryptographically random passw
 is written to `bootstrap-admin-password` beside the manager configuration with mode
 0600. Passwords and server settings are not logged. Change the bootstrap password
 in the UI after first login; the bootstrap file is not a password-reset mechanism.
+
+## Startup settings editor
+
+Mods → Startup settings edits values already stored in `mods/mod-settings.dat`.
+Booleans, numbers, strings, exact 64-bit integers and RGBA colors are supported;
+unknown compound values remain read-only. The editor validates storage types and
+color ranges; Factorio applies mod-specific limits when loading. It does not
+extract defaults or allowed choices from Lua setting prototypes.
+
+Saving requires a stopped server, serializes against game startup and mod uploads,
+and rejects a stale file revision. Only edited startup value bytes are replaced;
+runtime sections and the version header are preserved. Original files are backed
+up by SHA-256 under `mods/.startup-settings-backups` before atomic replacement.
+To restore one, stop the game, copy the desired backup locally as
+`mod-settings.dat`, and use Mods → Upload Mod.

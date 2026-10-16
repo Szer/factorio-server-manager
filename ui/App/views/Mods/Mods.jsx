@@ -12,6 +12,7 @@ import Fuse from "fuse.js";
 import CreateModPack from "./components/CreateModPack";
 import ModPack from "./components/ModPack";
 import ModList from "./components/ModList";
+import StartupSettings from "./components/StartupSettings";
 
 const Mods = ({serverStatus}) => {
 
@@ -119,6 +120,9 @@ const Mods = ({serverStatus}) => {
                 <TabControl>
                     <Tab title="Install Mod">
                         <AddMod refetchInstalledMods={fetchInstalledMods} fuse={fuse}/>
+                    </Tab>
+                    <Tab title="Startup settings">
+                        <StartupSettings running={serverStatus.running}/>
                     </Tab>
                     <Tab title="Upload Mod">
                         <UploadMod refetchInstalledMods={fetchInstalledMods}/>
