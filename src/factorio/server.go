@@ -37,6 +37,9 @@ type Server struct {
 	LogChan        chan []string          `json:"-"`
 }
 
+// GameFilesMu serializes stopped-server file changes against the game process lifetime.
+var GameFilesMu sync.Mutex
+
 var instantiated Server
 var once sync.Once
 
@@ -222,6 +225,10 @@ func GetFactorioServer() (f *Server) {
 }
 
 func (server *Server) Run() error {
+	if !GameFilesMu.TryLock() {
+		return errors.New("game files are in use")
+	}
+	defer GameFilesMu.Unlock()
 	var err error
 	config := bootstrap.GetConfig()
 	data, err := json.MarshalIndent(server.Settings, "", "  ")
