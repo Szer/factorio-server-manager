@@ -56,7 +56,13 @@ const UPSChart = ({running}) => {
         </div>
         {error ? <p role="alert">{error}</p> : !history ? <p>Loading UPS history…</p> : !history.configured ? <p>UPS telemetry is not configured.</p> : <>
             <svg viewBox="0 0 980 250" role="img" aria-label="Actual and target UPS over the last five minutes. Gaps indicate paused or unavailable samples." className="w-full" style={{minHeight: 180}}
-                 onMouseMove={e => {const box=e.currentTarget.getBoundingClientRect(); setSelected(Math.max(0,Math.min(points.length-1,Math.round(((e.clientX-box.left)/box.width*980-48)/900*30))));}}
+                 onMouseMove={e => {
+                     if (!points.length) return;
+                     const box = e.currentTarget.getBoundingClientRect();
+                     const time = history.start + ((e.clientX-box.left)/box.width*980-48)/900*300;
+                     setSelected(points.reduce((best, point, i) =>
+                         Math.abs(point.time-time) < Math.abs(points[best].time-time) ? i : best, 0));
+                 }}
                  onMouseLeave={() => setSelected(null)}>
                 <title>UPS over the last five minutes</title>
                 {[0,1,2,3].map(i => {const v=max*i/3;return <g key={i}><line x1="48" x2="948" y1={y(v)} y2={y(v)} stroke="#666" strokeWidth="0.5"/><text x="38" y={y(v)+4} textAnchor="end" fill="#ccc" fontSize="12">{Math.round(v)}</text></g>;})}

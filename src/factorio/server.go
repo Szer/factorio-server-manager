@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/OpenFactorioServerManager/factorio-server-manager/api/websocket"
 	"github.com/OpenFactorioServerManager/factorio-server-manager/bootstrap"
@@ -39,6 +40,9 @@ type Server struct {
 
 // GameFilesMu serializes stopped-server file changes against the game process lifetime.
 var GameFilesMu sync.Mutex
+var gameSession uint64
+
+func GameSession() uint64 { return atomic.LoadUint64(&gameSession) }
 
 var instantiated Server
 var once sync.Once
@@ -316,6 +320,7 @@ func (server *Server) Run() error {
 		log.Printf("Factorio process failed to start: %s", err)
 		return err
 	}
+	atomic.AddUint64(&gameSession, 1)
 	server.SetRunning(true)
 
 	err = server.Cmd.Wait()

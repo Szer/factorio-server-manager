@@ -8,8 +8,16 @@ import (
 	"time"
 )
 
+var LocalUPS = &telemetry.Collector{}
+
 func UPSHistory(w http.ResponseWriter, r *http.Request) {
 	config := bootstrap.GetConfig()
+	if config.PrometheusURL == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		WriteResponse(w, LocalUPS.History(time.Now()))
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	history, err := telemetry.Fetch(ctx, &http.Client{Timeout: 5 * time.Second}, config.PrometheusURL, config.TelemetryLabels, time.Now())

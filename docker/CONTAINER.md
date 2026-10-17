@@ -37,9 +37,9 @@ To restore one, stop the game, copy the desired backup locally as
 ## UPS history
 
 The Controls page shows actual/target UPS, players and the last five minutes of
-history, refreshed every ten seconds. Configure `prometheus_url` and optional
-`telemetry_labels` in the manager JSON to select one Factorio exporter. The
-exporter must provide `factorio_ups`, `factorio_target_ups`, `factorio_players`,
+history, refreshed every ten seconds. Without `prometheus_url`, the manager samples
+local RCON and keeps five minutes in memory. Set `prometheus_url` and optional
+`telemetry_labels` to use an external Factorio exporter instead. That exporter provides `factorio_ups`, `factorio_target_ups`, `factorio_players`,
 `factorio_paused`, `factorio_rcon_up` and `factorio_sample_timestamp_seconds`.
 
 The authenticated `/api/server/ups` endpoint issues a fixed, bounded range query;

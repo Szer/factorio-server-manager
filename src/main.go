@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"github.com/OpenFactorioServerManager/factorio-server-manager/telemetry"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -29,6 +34,23 @@ func main() {
 
 	// Initialize authentication system
 	api.SetupAuth()
+
+	ctx, cancelTelemetry := context.WithCancel(context.Background())
+	defer cancelTelemetry()
+	if config.PrometheusURL == "" {
+		go api.LocalUPS.Run(ctx, func(ctx context.Context) (telemetry.Sample, error) {
+			if !factorio.GetFactorioServer().GetRunning() {
+				return telemetry.Sample{}, errors.New("game stopped")
+			}
+			session := factorio.GameSession()
+			sample, err := telemetry.ReadRCON(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(config.FactorioRconPort)), config.FactorioRconPass)
+			sample.Session = session
+			if session != factorio.GameSession() {
+				return telemetry.Sample{}, errors.New("game restarted")
+			}
+			return sample, err
+		})
+	}
 
 	// Initialize HTTP router -- also initializes websocket
 	router := api.NewRouter()

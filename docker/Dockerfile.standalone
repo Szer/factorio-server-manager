@@ -1,0 +1,31 @@
+FROM node:22-bookworm-slim AS frontend
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY ui ./ui
+COPY app ./app
+COPY webpack.config.js tailwind.config.js ./
+RUN npm run build
+
+FROM golang:1.26 AS backend
+WORKDIR /src
+COPY src/go.mod src/go.sum ./
+RUN go mod download
+COPY src ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/factorio-server-manager .
+
+FROM debian:bookworm-slim
+LABEL org.opencontainers.image.source="https://github.com/Szer/factorio-server-manager"
+LABEL org.opencontainers.image.version="2.1.22-standalone1"
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl xz-utils python3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl --fail --location --retry 3 https://factorio.com/get-download/2.1.22/headless/linux64 -o /tmp/factorio.tar.xz \
+    && tar -xJf /tmp/factorio.tar.xz -C /opt && rm /tmp/factorio.tar.xz \
+    && /opt/factorio/bin/x64/factorio --version | grep 'Version: 2.1.22'
+WORKDIR /opt/fsm
+COPY --from=backend /out/factorio-server-manager ./
+COPY --from=frontend /src/app ./app
+COPY docker/standalone-entrypoint.py /opt/fsm/entrypoint.py
+EXPOSE 80/tcp 34197/udp
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["python3", "-B", "/opt/fsm/entrypoint.py"]
