@@ -28,3 +28,20 @@ See [UPS backends](../docs/UPS.md) for environment settings and Beszel provision
 Publish HTTP port 80 through the existing authenticated access path and game UDP
 34197 as needed. RCON needs no published host port. Give the container a two-minute
 stop grace period so the manager can save and stop the game on SIGTERM.
+
+## CI images
+
+Pull requests run Go race tests on the minimum and image toolchains, build the
+frontend and amd64 image, and smoke-test fresh manager startup and shutdown with
+the game stopped. No Factorio account or production data is needed.
+
+Successful builds on `master` publish the tested image to
+`ghcr.io/szer/factorio-server-manager:sha-<full-commit-sha>` and update `:master`.
+The workflow summary includes the digest for Dockge pinning. Manual workflow runs
+publish only when run on `master`. Publishing uses the repository's `GITHUB_TOKEN`;
+the existing GHCR package must grant this repository Actions write access.
+
+Use the digest from a successful run in Dockge's `image` field, preserving all
+volumes and configuration. Stop the game before recreating the manager. The new
+container leaves the game stopped until explicitly started in the UI. Rollback
+uses the previous image digest with the same persistent mounts.

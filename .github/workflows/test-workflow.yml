@@ -1,83 +1,75 @@
+name: Build, test and publish
+
 on:
-  push:
-    branches:
-      - '**'
-    tags-ignore:
-      - '*.*'
   pull_request:
-    branches:
-      - '**'
-env:
-  factorio_password: ${{ secrets.FACTORIO_PASSWORD }}
-  factorio_username: ${{ secrets.FACTORIO_USERNAME }}
-  FSM_MODPACK_DIR: 'dev_pack'
-  FSM_DIR: '../'
-  FSM_CONF: '../../conf.json.example'
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test-npm:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+        go: ['1.22', '1.26']
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-      - run: make app/bundle
-  test-go:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        go: ['1.22', '1']
-    runs-on: ${{ matrix.os }}
-    name: test-go ${{ matrix.go }} (${{ matrix.os }})
-    steps:
-      - uses: actions/checkout@v2
-      - name: Setup go
-        uses: actions/setup-go@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: ${{ matrix.go }}
-      - if: contains(matrix.os, 'ubuntu')
-        run: |
-          cd src
-          if [[ -z "$factorio_password" ]]; then
-            echo "run only short tests"
-            go test ./... -v -test.short
-          else
-            echo "run full test suit"
-            go test ./... -v
-          fi
-      - if: contains(matrix.os, 'windows')
-        run: |
-          cd src
-          if ([Environment]::GetEnvironmentVariable('factorio_password', 'Machine')) {
-            echo "run full test suit"
-            go test ./... -v
-          } else {
-            echo "run only short tests"
-            go test ./... -v "-test.short"
-          }
-  docker-push:
-    needs:  [test-npm, test-go]
+          cache-dependency-path: src/go.sum
+      - name: Test Go
+        working-directory: src
+        run: go test -race -short ./...
+
+  image:
+    needs: test
     runs-on: ubuntu-latest
-    if: github.repository == 'OpenFactorioServerManager/factorio-server-manager' && github.event_name == 'push' && github.ref != 'refs/heads/master'
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - uses: actions/checkout@v2
-      - uses: rlespinasse/github-slug-action@v3.x
-      - uses: actions/setup-node@v2
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build frontend and amd64 image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
-          node-version: '16'
-      - uses: actions/setup-go@v2
-      - uses: docker/setup-buildx-action@v1
-      - name: Login to dockerhub
-        uses: docker/login-action@v1
+          context: .
+          file: docker/Dockerfile.standalone
+          platforms: linux/amd64
+          load: true
+          tags: factorio-manager:test
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test bundled game and manager
+        run: bash docker/smoke-test.sh factorio-manager:test
+      - name: Log in to GHCR
+        if: github.repository == 'Szer/factorio-server-manager' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - run: make build; cp build/factorio-server-manager-linux.zip docker/factorio-server-manager-linux.zip
-      - id: docker_build
-        uses: docker/build-push-action@v2
-        with:
-          context: ./docker/
-          file: ./docker/Dockerfile-local
-          push: true
-          tags: ofsm/ofsm:${{ env.GITHUB_REF_SLUG }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish tested image
+        if: github.repository == 'Szer/factorio-server-manager' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        env:
+          IMAGE: ghcr.io/szer/factorio-server-manager
+          REVISION: ${{ github.sha }}
+        run: |
+          docker tag factorio-manager:test "$IMAGE:sha-$REVISION"
+          docker tag factorio-manager:test "$IMAGE:master"
+          docker push "$IMAGE:sha-$REVISION"
+          docker push "$IMAGE:master"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:sha-$REVISION")
+          echo "Published: \`$IMAGE:sha-$REVISION\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dockge image: \`$digest\`" >> "$GITHUB_STEP_SUMMARY"
