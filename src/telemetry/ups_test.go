@@ -22,7 +22,7 @@ func metric(name string, values ...interface{}) Series {
 func TestStatesAndGaps(t *testing.T) {
 	series := []Series{
 		metric("factorio_rcon_up", 0, "1", 10, "1", 20, "1", 30, "1", 40, "0", 50, "1"),
-		metric("factorio_sample_timestamp_seconds", 0, "0", 10, "10", 20, "20", 30, "-10", 50, "50"),
+		metric("factorio_sample_timestamp_seconds", 0, "0", 10, "10", 20, "20", 30, "-10", 40, "40", 50, "50"),
 		metric("factorio_paused", 0, "0", 10, "1", 20, "0", 30, "0", 50, "0"),
 		metric("factorio_ups", 0, "38.5", 10, "0", 30, "39", 50, "NaN"),
 		metric("factorio_target_ups", 0, "39", 10, "39", 20, "60", 30, "39", 50, "60"),
@@ -55,7 +55,7 @@ func TestFetchBoundsAndLabels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		q := r.URL.Query()
-		if r.URL.Path != "/api/v1/query_range" || q.Get("start") != "700" || q.Get("end") != "1000" || q.Get("step") != "10s" || q.Get("lookback_delta") != "20s" || !strings.Contains(q.Get("query"), `service="test-exporter"`) {
+		if r.URL.Path != "/api/v1/query_range" || q.Get("start") != "700" || q.Get("end") != "1000" || q.Get("step") != "10" || q.Get("lookback_delta") != "30" || !strings.Contains(q.Get("query"), `service="test-exporter"`) {
 			t.Errorf("unexpected query %v", q)
 		}
 		w.Header().Set("Content-Type", "application/json")

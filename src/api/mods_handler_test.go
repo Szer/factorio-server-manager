@@ -30,6 +30,23 @@ func TestMain(m *testing.M) {
 		log.Println("WARN: wasn't able to load env: ", err)
 	}
 
+	// Short tests use isolated files when no integration fixture is configured.
+	var temporary string
+	if testing.Short() && os.Getenv("FSM_CONF") == "" {
+		temporary, err = os.MkdirTemp("", "fsm-tests-")
+		if err != nil {
+			log.Fatal(err)
+		}
+		conf := filepath.Join(temporary, "conf.json")
+		if err = os.WriteFile(conf, []byte("{}"), 0600); err != nil {
+			log.Fatal(err)
+		}
+		os.Setenv("FSM_CONF", conf)
+		os.Setenv("FSM_DIR", temporary)
+		os.Setenv("FSM_MODPACK_DIR", filepath.Join(temporary, "packs"))
+		os.Setenv("mod_dir", filepath.Join(temporary, "mods"))
+	}
+
 	// basic setup stuff
 	bootstrap.NewConfig([]string{
 		"--dir", os.Getenv("FSM_DIR"),
@@ -58,7 +75,11 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+	if temporary != "" {
+		os.RemoveAll(temporary)
+	}
+	os.Exit(code)
 }
 
 func CheckShort(t *testing.T) {

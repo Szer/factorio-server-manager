@@ -1,4 +1,4 @@
-// Package telemetry reads a bounded UPS history from a configured Prometheus server.
+// Package telemetry collects and stores UPS samples with ordered backend fallback.
 package telemetry
 
 import (
@@ -25,7 +25,8 @@ type Point struct {
 	State   string   `json:"state"`
 }
 type History struct {
-	Configured bool    `json:"configured"`
+	Configured bool `json:"configured"`
+	sampleTime int64
 	Start      int64   `json:"start"`
 	End        int64   `json:"end"`
 	Points     []Point `json:"points"`
@@ -40,8 +41,12 @@ var labelName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 const metricNames = "factorio_ups|factorio_target_ups|factorio_players|factorio_paused|factorio_rcon_up|factorio_sample_timestamp_seconds"
 
 func Fetch(ctx context.Context, client *http.Client, base string, labels map[string]string, now time.Time) (*History, error) {
-	end := now.Unix() / 10 * 10
-	history := &History{Configured: base != "", Start: end - 300, End: end, Points: []Point{}}
+	return fetch(ctx, client, base, labels, now, Options{Interval: 10 * time.Second, Window: 5 * time.Minute, Freshness: 30 * time.Second, ReadTimeout: 5 * time.Second})
+}
+func fetch(ctx context.Context, client *http.Client, base string, labels map[string]string, now time.Time, o Options) (*History, error) {
+	step := int64(o.Interval / time.Second)
+	end := now.Unix() / step * step
+	history := &History{Configured: base != "", Start: end - int64(o.Window/o.Interval)*step, End: end, Points: []Point{}}
 	if base == "" {
 		return history, nil
 	}
@@ -63,11 +68,14 @@ func Fetch(ctx context.Context, client *http.Client, base string, labels map[str
 	}
 	selector += "}"
 	u.Path = strings.TrimRight(u.Path, "/") + "/api/v1/query_range"
-	query := url.Values{"query": {selector}, "start": {strconv.FormatInt(history.Start, 10)}, "end": {strconv.FormatInt(end, 10)}, "step": {"10s"}, "lookback_delta": {"20s"}, "timeout": {"4s"}}
+	query := url.Values{"query": {selector}, "start": {strconv.FormatInt(history.Start, 10)}, "end": {strconv.FormatInt(end, 10)}, "step": {strconv.FormatInt(step, 10)}, "lookback_delta": {strconv.FormatFloat(o.Freshness.Seconds(), 'f', -1, 64)}, "timeout": {strconv.FormatFloat(o.ReadTimeout.Seconds(), 'f', -1, 64)}}
 	u.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+	if o.PrometheusToken != "" {
+		req.Header.Set("Authorization", o.PrometheusToken)
 	}
 	response, err := client.Do(req)
 	if err != nil {
@@ -90,10 +98,28 @@ func Fetch(ctx context.Context, client *http.Client, base string, labels map[str
 	if envelope.Status != "success" || envelope.Data.ResultType != "matrix" {
 		return nil, errors.New("telemetry query failed")
 	}
-	history.Points, err = normalize(envelope.Data.Result, history.Start, end)
+	for _, series := range envelope.Data.Result {
+		if series.Metric["__name__"] != "factorio_sample_timestamp_seconds" {
+			continue
+		}
+		for _, pair := range series.Values {
+			var value string
+			if json.Unmarshal(pair[1], &value) != nil {
+				continue
+			}
+			sample, e := strconv.ParseFloat(value, 64)
+			if e == nil && !math.IsNaN(sample) && !math.IsInf(sample, 0) && sample <= float64(now.Unix()) && sample > float64(history.sampleTime) {
+				history.sampleTime = int64(sample)
+			}
+		}
+	}
+	history.Points, err = normalizeWith(envelope.Data.Result, history.Start, end, step, o.Freshness.Seconds())
 	return history, err
 }
 func normalize(series []Series, start, end int64) ([]Point, error) {
+	return normalizeWith(series, start, end, 10, 30)
+}
+func normalizeWith(series []Series, start, end, step int64, freshness float64) ([]Point, error) {
 	metrics := map[string]map[int64]float64{}
 	for _, s := range series {
 		name := s.Metric["__name__"]
@@ -117,7 +143,7 @@ func normalize(series []Series, start, end int64) ([]Point, error) {
 				continue
 			}
 			t := int64(timestamp)
-			if (t-start)%10 != 0 {
+			if (t-start)%step != 0 {
 				continue
 			}
 			if _, exists := metrics[name][t]; exists {
@@ -133,13 +159,13 @@ func normalize(series []Series, start, end int64) ([]Point, error) {
 		return nil
 	}
 	points := []Point{}
-	for t := start; t <= end; t += 10 {
+	for t := start; t <= end; t += step {
 		p := Point{Time: t, State: "unavailable"}
 		up := get("factorio_rcon_up", t)
 		sample := get("factorio_sample_timestamp_seconds", t)
-		if up != nil && *up == 0 {
+		if up != nil && *up == 0 && sample != nil && float64(t)-*sample >= -5 && float64(t)-*sample <= freshness {
 			p.State = "disconnected"
-		} else if up != nil && *up == 1 && sample != nil && float64(t)-*sample >= -5 && float64(t)-*sample <= 30 {
+		} else if up != nil && *up == 1 && sample != nil && float64(t)-*sample >= -5 && float64(t)-*sample <= freshness {
 			p.Target = get("factorio_target_ups", t)
 			p.Players = get("factorio_players", t)
 			paused := get("factorio_paused", t)

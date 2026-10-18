@@ -22,6 +22,8 @@ Actual UPS is tick delta divided by monotonic elapsed time; target UPS is game
 speed times 60. Pauses, reconnects, speed changes and game restarts leave gaps.
 History stays in memory for five minutes and clears when the manager restarts.
 An explicit `prometheus_url` still selects the external telemetry backend.
+`UPS_BACKENDS` enables ordered backend fallback and best-effort multi-backend writes.
+See [UPS backends](../docs/UPS.md) for environment settings and Beszel provisioning.
 
 Publish HTTP port 80 through the existing authenticated access path and game UDP
 34197 as needed. RCON needs no published host port. Give the container a two-minute

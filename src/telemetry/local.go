@@ -19,30 +19,13 @@ type Sample struct {
 }
 type Probe func(context.Context) (Sample, error)
 type Collector struct {
-	mu       sync.RWMutex
-	previous *Sample
-	points   []Point
+	Window, Freshness time.Duration
+	mu                sync.RWMutex
+	previous          *Sample
+	points            []Point
 }
 
-func (c *Collector) Run(ctx context.Context, probe Probe) {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		sampleCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		s, err := probe(sampleCtx)
-		cancel()
-		c.Record(s, err, time.Now())
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
-}
-func (c *Collector) Record(s Sample, err error, now time.Time) {
+func (c *Collector) Record(s Sample, err error, now time.Time) Point {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	p := Point{Time: now.Unix(), State: "disconnected"}
@@ -61,7 +44,7 @@ func (c *Collector) Record(s Sample, err error, now time.Time) {
 			p.State = "paused"
 		} else if prev := c.previous; prev != nil && !prev.Paused && prev.Session == s.Session && prev.Speed == s.Speed && s.Tick >= prev.Tick {
 			elapsed := s.Observed.Sub(prev.Observed).Seconds()
-			if elapsed > 0 && elapsed <= 25 {
+			if elapsed > 0 && elapsed <= c.freshness().Seconds() {
 				ups := float64(s.Tick-prev.Tick) / elapsed
 				p.UPS = &ups
 				p.State = "active"
@@ -69,21 +52,37 @@ func (c *Collector) Record(s Sample, err error, now time.Time) {
 		}
 		c.previous = &s
 	}
+	c.append(p, now)
+	return p
+}
+func (c *Collector) window() time.Duration {
+	if c.Window > 0 {
+		return c.Window
+	}
+	return 5 * time.Minute
+}
+func (c *Collector) freshness() time.Duration {
+	if c.Freshness > 0 {
+		return c.Freshness
+	}
+	return 25 * time.Second
+}
+func (c *Collector) append(p Point, now time.Time) {
 	c.points = append(c.points, p)
-	for len(c.points) > 0 && (c.points[0].Time < now.Add(-5*time.Minute).Unix() || len(c.points) > 32) {
+	for len(c.points) > 0 && (c.points[0].Time < now.Add(-c.window()).Unix() || len(c.points) > int(c.window()/time.Second)+2) {
 		c.points = c.points[1:]
 	}
 }
 func (c *Collector) History(now time.Time) *History {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	h := &History{Configured: true, Start: now.Add(-5 * time.Minute).Unix(), End: now.Unix(), Points: []Point{}}
+	h := &History{Configured: true, Start: now.Add(-c.window()).Unix(), End: now.Unix(), Points: []Point{}}
 	for _, p := range c.points {
 		if p.Time >= h.Start {
 			h.Points = append(h.Points, p)
 		}
 	}
-	if len(h.Points) == 0 || now.Unix()-h.Points[len(h.Points)-1].Time > 25 {
+	if len(h.Points) == 0 || now.Unix()-h.Points[len(h.Points)-1].Time > int64(c.freshness()/time.Second) {
 		h.Points = append(h.Points, Point{Time: now.Unix(), State: "unavailable"})
 	}
 	return h

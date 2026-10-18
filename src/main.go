@@ -37,8 +37,11 @@ func main() {
 
 	ctx, cancelTelemetry := context.WithCancel(context.Background())
 	defer cancelTelemetry()
-	if config.PrometheusURL == "" {
-		go api.LocalUPS.Run(ctx, func(ctx context.Context) (telemetry.Sample, error) {
+	options := telemetry.LoadOptions(config.PrometheusURL, config.TelemetryLabels)
+	api.UPS = telemetry.NewService(options)
+	log.Printf("UPS: backends=%v sampling=%s history=%s legacy_prometheus=%t", options.Backends, options.Interval, options.Window, options.LegacyPrometheus)
+	if !options.LegacyPrometheus {
+		go api.UPS.Run(ctx, func(ctx context.Context) (telemetry.Sample, error) {
 			if !factorio.GetFactorioServer().GetRunning() {
 				return telemetry.Sample{}, errors.New("game stopped")
 			}

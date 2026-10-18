@@ -18,8 +18,11 @@ const sampleCommand = `/sc rcon.print(game.tick .. " " .. game.speed .. " " .. t
 // ReadRCON uses its own bounded connection, separate from interactive commands.
 func ReadRCON(ctx context.Context, address, password string) (Sample, error) {
 	var result Sample
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+	}
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", address)
 	if err != nil {
 		return result, errors.New("RCON unavailable")

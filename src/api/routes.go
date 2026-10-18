@@ -43,6 +43,7 @@ func ServerOffMiddleware(next http.Handler) http.Handler {
 
 func NewRouter() *mux.Router {
 	mainRouter := mux.NewRouter().StrictSlash(true)
+	mainRouter.HandleFunc("/ups-config.js", UPSClientSettings).Methods("GET")
 
 	// create subrouter for authenticated calls
 	subRouter := mainRouter.NewRoute().Subrouter()
