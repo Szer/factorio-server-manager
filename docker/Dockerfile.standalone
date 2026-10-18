@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/factorio-se
 
 FROM debian:bookworm-slim
 LABEL org.opencontainers.image.source="https://github.com/Szer/factorio-server-manager"
-LABEL org.opencontainers.image.version="2.1.22-standalone1"
+LABEL org.opencontainers.image.version="2.1.22-standalone2"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl xz-utils python3 \
     && rm -rf /var/lib/apt/lists/* \
     && curl --fail --location --retry 3 https://factorio.com/get-download/2.1.22/headless/linux64 -o /tmp/factorio.tar.xz \

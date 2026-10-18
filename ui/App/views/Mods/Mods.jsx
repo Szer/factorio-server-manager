@@ -124,7 +124,7 @@ const Mods = ({serverStatus}) => {
                     <Tab title="Startup settings">
                         <StartupSettings running={serverStatus.running}/>
                     </Tab>
-                    <Tab title="Upload Mod">
+                    <Tab title="Upload mods & settings">
                         <UploadMod refetchInstalledMods={fetchInstalledMods}/>
                     </Tab>
                     <Tab title="Load Mods from Save">

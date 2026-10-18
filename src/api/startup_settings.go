@@ -21,7 +21,7 @@ func startupResponse(w http.ResponseWriter, document *modsettings.Document, err 
 		}
 		if errors.Is(err, os.ErrNotExist) {
 			status = http.StatusNotFound
-			err = errors.New("No mod-settings.dat exists yet. Upload one from your Factorio client first.")
+			err = errors.New("No mod-settings.dat exists yet. Upload one from your previous server or Factorio client using the upload form.")
 		}
 		w.WriteHeader(status)
 		WriteResponse(w, err.Error())

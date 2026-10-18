@@ -2,6 +2,7 @@ import React, {useEffect, useState} from "react";
 import client from "../../../../api/client";
 import Button from "../../../components/Button";
 import Panel from "../../../components/Panel";
+import UploadMod from "./UploadMod";
 
 const StartupSettings = ({running}) => {
     const [document, setDocument] = useState(null);
@@ -68,6 +69,7 @@ const StartupSettings = ({running}) => {
         {running && <p className="text-orange mb-3" role="status">Stop the server before saving startup settings.</p>}
         {error && <p role="alert" className="text-red mb-3">{error}</p>}
         {message && <p role="status" className="text-green mb-3">{message}</p>}
+        {!document && <UploadMod settingsOnly disabled={running || busy} refetchInstalledMods={load}/>}
         {!document && <Button onClick={load} isLoading={busy}>Reload settings</Button>}
         {document && <form onSubmit={save}>
             <div className="flex flex-wrap items-center gap-3 mb-4">
