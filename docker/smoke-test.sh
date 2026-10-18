@@ -8,7 +8,7 @@ docker run --rm --entrypoint /opt/factorio/bin/x64/factorio "$image" --version |
 container=$(docker run -d -p 127.0.0.1::80 "$image")
 port=$(docker port "$container" 80/tcp)
 ready=false
-for attempt in {1..30}; do
+for _attempt in {1..30}; do
   if curl --fail --silent "http://$port/login" >/dev/null; then
     ready=true
     break
