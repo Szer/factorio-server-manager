@@ -1,102 +1,49 @@
 import EventEmitter from "events";
 
 const bus = new EventEmitter();
+const subscriptions = new Set();
+const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+let socket;
 
-const ws_scheme = window.location.protocol === "https:" ? "wss" : "ws";
+function send(type, value) {
+    if (socket?.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify({room_name: "", controls: {type, value}}));
+    return true;
+}
+
+function subscribe(room) {
+    if (subscriptions.has(room)) return;
+    subscriptions.add(room);
+    send('subscribe', room);
+}
+
+function unsubscribe(room) {
+    subscriptions.delete(room);
+    send('unsubscribe', room);
+}
+
+bus.on('log subscribe', () => subscribe('gamelog'));
+bus.on('log unsubscribe', () => unsubscribe('gamelog'));
+bus.on('server status subscribe', () => subscribe('server_status'));
+bus.on('server status unsubscribe', () => unsubscribe('server_status'));
+bus.on('command send', command => {
+    if (!send('command', command)) window.flash('Console disconnected. Try again after reconnecting.', 'red');
+});
 
 function connect() {
-    const socket = new WebSocket(ws_scheme + "://" + window.location.host + "/ws");
-
-    function logSubscribeEvent() {
-        socket.send(
-            JSON.stringify(
-                {
-                    room_name: "",
-                    controls: {
-                        type: "subscribe",
-                        value: "gamelog"
-                    }
-                }
-            )
-        );
-    }
-
-    function logUnsubscribeEvent() {
-        socket.send(
-            JSON.stringify(
-                {
-                    room_name: "",
-                    controls: {
-                        type: "unsubscribe",
-                        value: "gamelog"
-                    }
-                }
-            )
-        );
-    }
-
-    function serverStatusSubscribeEvent() {
-        socket.send(
-            JSON.stringify(
-                {
-                    room_name: "",
-                    controls: {
-                        type: "subscribe",
-                        value: "server_status"
-                    }
-                }
-            )
-        );
-    }
-
-    function commandSendEvent(command) {
-        socket.send(
-            JSON.stringify(
-                {
-                    room_name: "",
-                    controls: {
-                        type: "command",
-                        value: command
-                    }
-                }
-            )
-        );
-    }
-
-    function registerEventEmitter() {
-        bus.on('log subscribe', logSubscribeEvent);
-        bus.on('log unsubscribe', logUnsubscribeEvent);
-        bus.on('server status subscribe', serverStatusSubscribeEvent);
-        bus.on('command send', commandSendEvent);
-    }
-
-    function unregisterEventEmitter() {
-        bus.off('log subscribe', logSubscribeEvent);
-        bus.off('log unsubscribe', logUnsubscribeEvent);
-        bus.off('server status subscribe', serverStatusSubscribeEvent);
-        bus.off('command send', commandSendEvent);
-    }
-
-    socket.onmessage = e => {
-        const {room_name, message} = JSON.parse(e.data);
+    socket = new WebSocket(`${scheme}://${window.location.host}/ws`);
+    socket.onopen = () => {
+        // Replay desired subscriptions after both initial connection and reconnect.
+        subscriptions.forEach(room => send('subscribe', room));
+        bus.emit('connected');
+    };
+    socket.onmessage = event => {
+        const {room_name, message} = JSON.parse(event.data);
         bus.emit(room_name, message);
-    }
-
-    socket.onerror = e => {
-        socket.close();
-    }
-
-    socket.onclose = e => {
-        unregisterEventEmitter()
-        // reconnect after 5 seconds
-        setTimeout(connect, 5000);
-    }
-
-    socket.onopen = e => {
-        registerEventEmitter(socket)
-    }
+    };
+    socket.onerror = () => socket.close();
+    socket.onclose = () => setTimeout(connect, 5000);
 }
 
 connect();
-
 export default bus;
