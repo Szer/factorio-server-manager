@@ -9,31 +9,38 @@ import Input from "../components/Input";
 import Error from "../components/Error";
 import UPSChart from "../components/UPSChart";
 
-const Controls = ({serverStatus}) => {
+const Controls = ({serverStatus, refreshStatus}) => {
 
     const factorioVersion = serverStatus.fac_version ? serverStatus.fac_version : 'Unknown';
     const [saves, setSaves] = useState([]);
     const [isDisabled, setIsDisabled] = useState(true);
-    const [isStopping, setIsStopping] = useState(false);
-    const [isStarting, setIsStarting] = useState(false);
-    const [isKilling, setIsKilling] = useState(false);
+    const [pendingAction, setPendingAction] = useState(null);
+    const isStopping = pendingAction === 'stop';
+    const isStarting = pendingAction === 'start';
+    const isKilling = pendingAction === 'kill';
 
     const { handleSubmit, reset, register, formState: {errors} } = useForm();
 
-    const startServer = async (data) => {
-        setIsStarting(true);
-        await server.start(data.ip, parseInt(data.port), data.save);
-    }
+    const runAction = async (name, request) => {
+        setPendingAction(name);
+        try {
+            await request();
+        } catch {
+            // The API client displays request errors; status is reconciled even on failure.
+        } finally {
+            try {
+                await refreshStatus();
+            } catch {
+                // Periodic status polling will retry if this refresh fails.
+            } finally {
+                setPendingAction(null);
+            }
+        }
+    };
 
-    const stopServer = async () => {
-        setIsStopping(true);
-        await server.stop();
-    }
-
-    const killServer = async () => {
-        setIsKilling(true);
-        await server.kill();
-    }
+    const startServer = data => runAction('start', () => server.start(data.ip, parseInt(data.port), data.save));
+    const stopServer = () => runAction('stop', () => server.stop());
+    const killServer = () => runAction('kill', () => server.kill());
 
     useEffect(() => {
         savesResource.list(true)
@@ -129,10 +136,10 @@ const Controls = ({serverStatus}) => {
                 <div className="md:flex">
                     {serverStatus.running
                         ? <>
-                            <Button onClick={stopServer} isLoading={isStopping} isDisabled={isKilling} size="sm" className="w-full md:w-auto mb-2 md:mb-0 md:mr-2" type="default">Save & Stop Server</Button>
-                            <Button onClick={killServer} isLoading={isKilling} isDisabled={isStopping} size="sm" type="danger" className="w-full md:w-auto">Kill Server</Button>
+                            <Button onClick={stopServer} isLoading={isStopping} isDisabled={pendingAction !== null} size="sm" className="w-full md:w-auto mb-2 md:mb-0 md:mr-2" type="default">Save & Stop Server</Button>
+                            <Button onClick={killServer} isLoading={isKilling} isDisabled={pendingAction !== null} size="sm" type="danger" className="w-full md:w-auto">Kill Server</Button>
                         </>
-                        : <Button isSubmit={true} isDisabled={isDisabled} isLoading={isStarting} size="sm" type="success" className="w-full md:w-auto">Start Server</Button>
+                        : <Button isSubmit={true} isDisabled={isDisabled || pendingAction !== null} isLoading={isStarting} size="sm" type="success" className="w-full md:w-auto">Start Server</Button>
                     }
                 </div>
             }

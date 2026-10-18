@@ -5,7 +5,8 @@ RUN npm ci
 COPY ui ./ui
 COPY app ./app
 COPY webpack.config.js tailwind.config.js ./
-RUN npm run build
+COPY tests ./tests
+RUN npm test && npm run build
 
 FROM golang:1.26 AS backend
 WORKDIR /src
