@@ -1,32 +1,25 @@
 import React, {useEffect, useState} from "react";
-import {NavLink} from "react-router-dom";
+import {NavLink, Outlet} from "react-router-dom";
 import Button from "./Button";
 import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
 import {faBars} from "@fortawesome/free-solid-svg-icons";
+import {Flash} from "./Flash";
 
-const Layout = ({children, handleLogout, serverStatus, updateServerStatus}) => {
+const Layout = ({handleLogout, serverStatus}) => {
 
     const [isNavCollapsed, setIsNavCollapsed] = useState(true);
-
-    useEffect(() => {
-        (async () => {
-            updateServerStatus()
-        })();
-    }, []);
 
     const Status = ({info}) => {
 
         let text = 'Unknown';
         let color = 'gray-light';
 
-        if (info) {
-            if (info.status === 'running') {
-                text = 'Running';
-                color = 'green';
-            } else if (info.status === 'stopped') {
-                text = 'Stopped';
-                color = 'red';
-            }
+        if (info && info.running) {
+            text = 'Running';
+            color = 'green';
+        } else if (info && !info.running) {
+            text = 'Stopped';
+            color = 'red';
         }
 
         return (
@@ -38,10 +31,14 @@ const Layout = ({children, handleLogout, serverStatus, updateServerStatus}) => {
         return (
             <NavLink
                 onClick={() => setIsNavCollapsed(true)}
-                exact={true}
+                end
                 to={to}
-                activeClassName="bg-orange"
-                className={`hover:glow-orange accentuated bg-gray-light hover:bg-orange text-black font-bold py-2 px-4 w-full block${last ? '' : ' mb-1'}`}
+                className={({isActive}) => {
+                    return [
+                        isActive ? "bg-orange" : "",
+                        `hover:glow-orange accentuated bg-gray-light hover:bg-orange text-black font-bold py-2 px-4 w-full block${last ? '' : ' mb-1'}`,
+                    ].join(" ")
+                }}
             >{children}</NavLink>)
     }
 
@@ -97,8 +94,9 @@ const Layout = ({children, handleLogout, serverStatus, updateServerStatus}) => {
 
             {/*Main*/}
             <div className="md:ml-88 min-h-screen">
-                <div className="container mx-auto pt-16 px-6">
-                    {children}
+                <div className="container md:mx-auto pt-16 md:px-6">
+                    <Outlet />
+                    <Flash/>
                 </div>
             </div>
         </>

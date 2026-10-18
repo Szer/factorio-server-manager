@@ -1,0 +1,13 @@
+.git
+node_modules
+.env
+src/.env
+conf.json
+factorio.auth
+*.log
+*.db
+build
+dev
+dev_packs
+src/dev
+src/dev_packs

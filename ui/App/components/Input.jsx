@@ -1,14 +1,14 @@
 import React from "react";
 
 const Input = ({
-                   name,
-                   inputRef,
-                   placeholder = null,
+                   register,
+                   placeholder = undefined,
                    type = "text",
-                   defaultValue = null,
+                   defaultValue = undefined,
                    hasAutoComplete = true,
-                   onKeyDown = () => null,
-                   min = null,
+                   onKeyDown = () => undefined,
+                   min = undefined,
+                   max = undefined,
                    value = undefined,
                    disabled = false
                }) => {
@@ -16,14 +16,13 @@ const Input = ({
         <input
             className="shadow appearance-none border w-full py-2 px-3 text-black"
             placeholder={placeholder}
-            ref={inputRef}
-            name={name}
-            id={name}
+            {...register}
             type={type}
             onKeyDown={onKeyDown}
             autoComplete={hasAutoComplete ? "on" : "off"}
             defaultValue={defaultValue}
             min={min}
+            max={max}
             value={value}
             disabled={disabled}
         />

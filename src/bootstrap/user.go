@@ -1,22 +1,22 @@
 package bootstrap
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/glebarez/sqlite"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"log"
-	"math/rand"
 	"os"
 )
 
 type User struct {
 	gorm.Model
-	Username string `json:"username",gorm:"uniqueIndex,not null"`
-	Password string `json:"password",gorm:"not null"`
-	Role     string `json:"role",gorm:"not null"`
+	Username string `json:"username" gorm:"uniqueIndex,not null"`
+	Password string `json:"password" gorm:"not null"`
+	Role     string `json:"role" gorm:"not null"`
 	Email    string `json:"email"`
 }
 
@@ -94,7 +94,7 @@ func MigrateLevelDBToSqlite(oldDBFile, newDBFile string) {
 
 			log.Println(`Migrated user in database. It still had default password "factorio" set. New credentials:`)
 			log.Printf("Username: %s", datum.Username)
-			log.Printf("Password: %s", newPassword)
+			log.Println("Migrated legacy password; reset it before use")
 		}
 
 		user := &User{
@@ -118,12 +118,10 @@ func MigrateLevelDBToSqlite(oldDBFile, newDBFile string) {
 	}
 }
 
-var randLetters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
 func GenerateRandomPassword() string {
-	pass := make([]rune, 24)
-	for i := range pass {
-		pass[i] = randLetters[rand.Intn(len(randLetters))]
+	value := make([]byte, 32)
+	if _, err := rand.Read(value); err != nil {
+		panic(err)
 	}
-	return string(pass)
+	return base64.RawURLEncoding.EncodeToString(value)
 }

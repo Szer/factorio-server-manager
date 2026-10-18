@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useState} from "react";
 import {useForm} from "react-hook-form";
 import Input from "../../../../../components/Input";
 import Label from "../../../../../components/Label";
@@ -8,13 +8,16 @@ import modsResource from "../../../../../../api/resources/mods";
 const FactorioLogin = ({setIsFactorioAuthenticated}) => {
 
     const {register, handleSubmit} = useForm();
+    const [isLoading, setIsLoading] = useState(false);
 
     const login = ({username, password}) => {
+        setIsLoading(true);
         modsResource.portal.login(username, password)
             .then(res => {
                 setIsFactorioAuthenticated(true)
             })
             .catch(() => window.flash("Given username or email and password do not match any account.", "red"))
+            .finally(() => setIsLoading(false));
     }
 
     return (
@@ -22,14 +25,14 @@ const FactorioLogin = ({setIsFactorioAuthenticated}) => {
             <div className="flex mb-4">
                 <div className="w-1/2 mr-2">
                     <Label text="Username" htmlFor="username"/>
-                    <Input name="username" inputRef={register({required: true})}/>
+                    <Input register={register('username',{required: true})}/>
                 </div>
                 <div className="w-1/2 ml-2">
                     <Label text="Password" htmlFor="password"/>
-                    <Input name="password" type="password" inputRef={register({required: true})}/>
+                    <Input type="password" register={register('password',{required: true})}/>
                 </div>
             </div>
-            <Button isSubmit={true}>Login</Button>
+            <Button isSubmit={true} isLoading={isLoading}>Login</Button>
         </form>
     )
 }

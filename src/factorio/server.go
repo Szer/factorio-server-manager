@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/OpenFactorioServerManager/factorio-server-manager/api/websocket"
 	"github.com/OpenFactorioServerManager/factorio-server-manager/bootstrap"
@@ -26,7 +27,7 @@ type Server struct {
 	Latency        int                    `json:"latency"`
 	BindIP         string                 `json:"bindip"`
 	Port           int                    `json:"port"`
-	running        bool                   `json:"running"`
+	Running        bool                   `json:"running"`
 	Version        Version                `json:"fac_version"`
 	BaseModVersion string                 `json:"base_mod_version"`
 	StdOut         io.ReadCloser          `json:"-"`
@@ -37,20 +38,27 @@ type Server struct {
 	LogChan        chan []string          `json:"-"`
 }
 
+// GameFilesMu serializes stopped-server file changes against the game process lifetime.
+var GameFilesMu sync.Mutex
+var gameSession uint64
+
+func GameSession() uint64 { return atomic.LoadUint64(&gameSession) }
+
 var instantiated Server
 var once sync.Once
 
 func (server *Server) SetRunning(newState bool) {
-	if server.running != newState {
+	if server.Running != newState {
 		log.Println("new state, will also send to correct room")
-		server.running = newState
+		server.Running = newState
 		wsRoom := websocket.WebsocketHub.GetRoom("server_status")
-		wsRoom.Send("Server status has changed")
+		response, _ := json.Marshal(server)
+		wsRoom.Send(string(response))
 	}
 }
 
 func (server *Server) GetRunning() bool {
-	return server.running
+	return server.Running
 }
 
 func (server *Server) autostart() {
@@ -183,13 +191,13 @@ func NewFactorioServer() (err error) {
 
 	// load admins from additional file
 	if (server.Version.Greater(Version{0, 17, 0})) {
-		if _, err = os.Stat(filepath.Join(config.FactorioConfigDir, config.FactorioAdminFile)); os.IsNotExist(err) {
+		if _, err = os.Stat(config.FactorioAdminFile); os.IsNotExist(err) {
 			//save empty admins-file
-			err = ioutil.WriteFile(filepath.Join(config.FactorioConfigDir, config.FactorioAdminFile), []byte("[]"), 0664)
+			err = ioutil.WriteFile(config.FactorioAdminFile, []byte("[]"), 0664)
 			server.Settings["admins"] = make([]string, 0)
 		} else {
 			var data []byte
-			data, err = ioutil.ReadFile(filepath.Join(config.FactorioConfigDir, config.FactorioAdminFile))
+			data, err = ioutil.ReadFile(config.FactorioAdminFile)
 			if err != nil {
 				log.Printf("Error loading FactorioAdminFile: %s", err)
 				return
@@ -221,6 +229,10 @@ func GetFactorioServer() (f *Server) {
 }
 
 func (server *Server) Run() error {
+	if !GameFilesMu.TryLock() {
+		return errors.New("game files are in use")
+	}
+	defer GameFilesMu.Unlock()
 	var err error
 	config := bootstrap.GetConfig()
 	data, err := json.MarshalIndent(server.Settings, "", "  ")
@@ -230,7 +242,7 @@ func (server *Server) Run() error {
 		ioutil.WriteFile(config.SettingsFile, data, 0644)
 	}
 
-	saves, err := ListSaves(config.FactorioSavesDir)
+	saves, err := ListSaves()
 	if err != nil {
 		log.Println("Failed to get saves list: ", err)
 	}
@@ -252,24 +264,33 @@ func (server *Server) Run() error {
 		"--bind", server.BindIP,
 		"--port", strconv.Itoa(server.Port),
 		"--server-settings", config.SettingsFile,
+		"--config", config.FactorioConfigFile,
+		"--mod-directory", config.FactorioModsDir,
 		"--rcon-port", strconv.Itoa(config.FactorioRconPort),
 		"--rcon-password", config.FactorioRconPass)
 
+	args = append(args, config.FactorioExtraArgs...)
+
 	if (server.Version.Greater(Version{0, 17, 0})) {
-		args = append(args, "--server-adminlist", filepath.Join(config.FactorioConfigDir, config.FactorioAdminFile))
+		args = append(args, "--server-adminlist", config.FactorioAdminFile)
 	}
 
-	if server.Savefile == "Load Latest" {
+	if strings.HasPrefix(server.Savefile, "Load Latest") {
 		args = append(args, "--start-server-load-latest")
 	} else {
 		args = append(args, "--start-server", filepath.Join(config.FactorioSavesDir, server.Savefile))
 	}
 
+	// Write chat log to a different file if requested (if not it will be mixed-in with the default logfile)
+	if config.ChatLogFile != "" {
+		args = append(args, "--console-log", config.ChatLogFile)
+	}
+
 	if config.GlibcCustom == "true" {
-		log.Println("Starting server with command: ", config.GlibcLocation, args)
+		log.Println("Starting Factorio with custom glibc")
 		server.Cmd = exec.Command(config.GlibcLocation, args...)
 	} else {
-		log.Println("Starting server with command: ", config.FactorioBinary, args)
+		log.Println("Starting Factorio")
 		server.Cmd = exec.Command(config.FactorioBinary, args...)
 	}
 
@@ -299,12 +320,14 @@ func (server *Server) Run() error {
 		log.Printf("Factorio process failed to start: %s", err)
 		return err
 	}
+	atomic.AddUint64(&gameSession, 1)
 	server.SetRunning(true)
 
 	err = server.Cmd.Wait()
+	log.Printf("Factorio process is closed")
+	server.SetRunning(false)
 	if err != nil {
 		log.Printf("Factorio process exited with error: %s", err)
-		server.SetRunning(false)
 		return err
 	}
 
@@ -340,13 +363,15 @@ func (server *Server) parseRunningCommand(std io.ReadCloser) (err error) {
 			// check if slice index is greater than 2 to prevent panic
 			if len(line) > 2 {
 				// log line for opened rcon connection
-				if strings.Contains(strings.Join(line, " "), rconLog) {
+				if strings.Contains(text, rconLog) {
 					log.Printf("Rcon running on Factorio Server")
 					err = connectRC()
 					if err != nil {
 						log.Printf("Error: %s", err)
 					}
 				}
+
+				server.checkProcessHealth(text)
 			}
 		}
 	}
@@ -359,10 +384,10 @@ func (server *Server) parseRunningCommand(std io.ReadCloser) (err error) {
 
 func (server *Server) writeLog(logline string) error {
 	config := bootstrap.GetConfig()
-	logfileName := filepath.Join(config.FactorioDir, "factorio-server-console.log")
+	logfileName := config.ConsoleLogFile
 	file, err := os.OpenFile(logfileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		log.Printf("Cannot open logfile for appending Factorio Server output: %s", err)
+		log.Printf("Cannot open logfile %s for appending Factorio Server output: %s", logfileName, err)
 		return err
 	}
 	defer file.Close()
@@ -370,7 +395,7 @@ func (server *Server) writeLog(logline string) error {
 	logline = logline + "\n"
 
 	if _, err = file.WriteString(logline); err != nil {
-		log.Printf("Error appending to factorio-server-console.log: %s", err)
+		log.Printf("Error appending to %s: %s", logfileName, err)
 		return err
 	}
 

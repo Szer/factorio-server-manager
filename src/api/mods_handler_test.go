@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"flag"
 	"io"
 	"log"
 	"mime/multipart"
@@ -21,15 +22,36 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	flag.Parse()
 	var err error
 
-	godotenv.Load("../.env")
+	err = godotenv.Load("../.env")
+	if err != nil {
+		log.Println("WARN: wasn't able to load env: ", err)
+	}
+
+	// Short tests use isolated files when no integration fixture is configured.
+	var temporary string
+	if testing.Short() && os.Getenv("FSM_CONF") == "" {
+		temporary, err = os.MkdirTemp("", "fsm-tests-")
+		if err != nil {
+			log.Fatal(err)
+		}
+		conf := filepath.Join(temporary, "conf.json")
+		if err = os.WriteFile(conf, []byte("{}"), 0600); err != nil {
+			log.Fatal(err)
+		}
+		os.Setenv("FSM_CONF", conf)
+		os.Setenv("FSM_DIR", temporary)
+		os.Setenv("FSM_MODPACK_DIR", filepath.Join(temporary, "packs"))
+		os.Setenv("mod_dir", filepath.Join(temporary, "mods"))
+	}
 
 	// basic setup stuff
 	bootstrap.NewConfig([]string{
-		"--dir", os.Getenv("dir"),
-		"--conf", os.Getenv("conf"),
-		"--mod-pack-dir", os.Getenv("mod_pack_dir"),
+		"--dir", os.Getenv("FSM_DIR"),
+		"--conf", os.Getenv("FSM_CONF"),
+		"--mod-pack-dir", os.Getenv("FSM_MODPACK_DIR"),
 		"--mod-dir", os.Getenv("mod_dir"),
 	})
 
@@ -45,7 +67,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error loading factorio credentials: %s", err)
 		return
 	}
-	if !load {
+	if !load && !testing.Short() {
 		// no credentials found, login...
 		err, _ = factorio.FactorioLogin(os.Getenv("factorio_username"), os.Getenv("factorio_password"))
 		if err != nil {
@@ -53,7 +75,11 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+	if temporary != "" {
+		os.RemoveAll(temporary)
+	}
+	os.Exit(code)
 }
 
 func CheckShort(t *testing.T) {

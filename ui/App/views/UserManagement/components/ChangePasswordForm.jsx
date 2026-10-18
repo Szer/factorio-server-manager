@@ -7,14 +7,16 @@ import Input from "../../../components/Input";
 import Error from "../../../components/Error";
 
 const ChangePasswordForm = () => {
-    const {register, handleSubmit, errors, watch} = useForm();
-    const password = watch('new_password');
+    const {register, handleSubmit, reset, formState: {errors}, watch} = useForm();
+
+    const new_password = watch("new_password");
 
     const onSubmit = async (data) => {
         const res = await user.changePassword(data);
         if (res) {
             // Update successful
             window.flash("Password changed", "green")
+            reset();
         }
     }
 
@@ -22,8 +24,7 @@ const ChangePasswordForm = () => {
         <form onSubmit={handleSubmit(onSubmit)}>
             <div className="mb-4">
                 <Label htmlFor="old_password" text="Old Password"/>
-                <Input inputRef={register({required: true})}
-                       name="old_password"
+                <Input register={register('old_password',{required: true})}
                        type="password"
                        placeholder="Old Password"
                 />
@@ -31,8 +32,7 @@ const ChangePasswordForm = () => {
             </div>
             <div className="mb-4">
                 <Label htmlFor="new_password" text="New Password"/>
-                <Input inputRef={register({required: true})}
-                       name="new_password"
+                <Input register={register('new_password',{required: true})}
                        type="password"
                        placeholder="New Password"
                 />
@@ -40,8 +40,7 @@ const ChangePasswordForm = () => {
             </div>
             <div className="mb-4">
                 <Label htmlFor="new_password_confirmation" text="New Password Confirmation"/>
-                <Input inputRef={register({required: true})}
-                       name="new_password_confirmation"
+                <Input register={register('new_password_confirmation',{required: true, validate: value => value === new_password})}
                        type="password"
                        placeholder="New Password"
                 />

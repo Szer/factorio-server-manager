@@ -85,14 +85,28 @@ func SaveSession(w http.ResponseWriter, r *http.Request, session *sessions.Sessi
 // Lists all save files in the factorio/saves directory
 func ListSaves(w http.ResponseWriter, r *http.Request) {
 	var resp interface{}
-	config := bootstrap.GetConfig()
 	defer func() {
 		WriteResponse(w, resp)
 	}()
 
 	w.Header().Set("Content-Type", "application/json;charset=UTF-8")
 
-	savesList, err := factorio.ListSaves(config.FactorioSavesDir)
+	latestParam := r.URL.Query().Get("latest")
+
+	var withLatest bool
+
+	if latestParam != "" {
+		var err error
+		withLatest, err = strconv.ParseBool(latestParam)
+		if err != nil {
+			resp = fmt.Sprintf("Error parsing latestParam: %s", err)
+			log.Println(resp)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+
+	savesList, err := factorio.ListSaves()
 	if err != nil {
 		resp = fmt.Sprintf("Error listing save files: %s", err)
 		log.Println(resp)
@@ -100,8 +114,19 @@ func ListSaves(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loadLatest := factorio.Save{Name: "Load Latest"}
-	savesList = append(savesList, loadLatest)
+	// get actual latest and add name
+	// but only if requested
+	if withLatest && len(savesList) != 0 {
+		latestSave, err := factorio.GetLatestSave()
+		if err != nil {
+			resp = fmt.Sprintf("Error getting latest save: %s", err)
+			log.Println(resp)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		latestSave.Name = fmt.Sprintf("Load Latest (%s)", latestSave.Name)
+		savesList = append(savesList, latestSave)
+	}
 
 	resp = savesList
 }
@@ -133,10 +158,11 @@ func UploadSave(w http.ResponseWriter, r *http.Request) {
 
 	for _, saveFile := range r.MultipartForm.File["savefile"] {
 		ext := filepath.Ext(saveFile.Filename)
-		if ext != "zip" {
+		if ext != ".zip" {
 			// Only zip-files allowed
 			resp = fmt.Sprintf("Fileformat {%s} is not allowed", ext)
 			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
 		}
 
 		file, err := saveFile.Open()
@@ -300,7 +326,7 @@ func StartServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Starting Factorio server with settings: %v", string(body))
+	log.Println("Received Factorio start request")
 
 	err = json.Unmarshal(body, &server)
 	if err != nil {
@@ -403,22 +429,11 @@ func KillServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func CheckServer(w http.ResponseWriter, r *http.Request) {
-	resp := map[string]string{}
-
 	defer func() {
-		WriteResponse(w, resp)
+		WriteResponse(w, factorio.GetFactorioServer())
 	}()
 
 	w.Header().Set("Content-Type", "application/json;charset=UTF-8")
-	var server = factorio.GetFactorioServer()
-	if server.GetRunning() {
-		resp["status"] = "running"
-		resp["port"] = strconv.Itoa(server.Port)
-		resp["savefile"] = server.Savefile
-		resp["address"] = server.BindIP
-	} else {
-		resp["status"] = "stopped"
-	}
 }
 
 func FactorioVersion(w http.ResponseWriter, r *http.Request) {
@@ -722,7 +737,7 @@ func UpdateServerSettings(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	log.Printf("Received settings JSON: %s", body)
+	log.Println("Received server settings update")
 	var server = factorio.GetFactorioServer()
 
 	// Race Condition while unmarshal possible
@@ -771,7 +786,7 @@ func UpdateServerSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = ioutil.WriteFile(filepath.Join(config.FactorioConfigDir, config.FactorioAdminFile), admins, 0664)
+		err = ioutil.WriteFile(config.FactorioAdminFile, admins, 0664)
 		if err != nil {
 			resp = fmt.Sprintf("Failed to save admins: %s", err)
 			log.Println(resp)
