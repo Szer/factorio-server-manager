@@ -9,152 +9,100 @@ import Button from "../components/Button";
 import {useForm} from "react-hook-form";
 
 const ServerSettings = () => {
-
     const [settings, setSettings] = useState();
-    const [numberInputs, setNumberInputs] = useState([]);
-
-    const {register, handleSubmit, formState: {errors}, control} = useForm();
+    const {register, handleSubmit, reset, formState: {isSubmitting}} = useForm();
 
     const fetchSettings = async () => {
         const res = await settingsResource.server.list();
+        const values = {...res};
+        for (const [key, value] of Object.entries(res)) {
+            if (Array.isArray(value) && value.every(item => typeof item === "string")) {
+                values[key] = value.join(",");
+            }
+        }
         setSettings(res);
+        reset(values);
     };
 
-    const saveServerSettings = data => {
-        data.tags = data.tags.split(',');
-        data.admins = data.admins.split(',');
+    const reportError = error => {
+        // HTTP failures are displayed by the shared API client.
+        if (!error.isAxiosError) window.flash("Could not load or save server settings.", "red");
+    };
 
-        numberInputs.forEach(numberInput => {
-            data[numberInput] = parseInt(data[numberInput]);
-        });
-
-        Object.keys(settings).map(key => {
-            if (key.startsWith("_comment")) {
-                data[key] = settings[key];
+    const saveServerSettings = async data => {
+        try {
+            const updated = {...settings};
+            for (const [key, value] of Object.entries(settings)) {
+                if (key.startsWith("_comment") || data[key] === undefined) continue;
+                if (Array.isArray(value) && value.every(item => typeof item === "string")) {
+                    updated[key] = String(data[key] ?? "").split(",").map(item => item.trim()).filter(Boolean);
+                } else if (key === "visibility" && value && typeof value === "object") {
+                    updated[key] = {...value, ...data[key]};
+                } else if (["string", "number", "boolean"].includes(typeof value)) {
+                    updated[key] = data[key];
+                }
             }
-        });
-       settingsResource.server.update(data)
-           .then(() => {
-               fetchSettings()
-                   .then(() => window.flash("Settings saved.", "green"))
-           });
-    }
-
-    useEffect(() => {
-        fetchSettings();
-    }, []);
-
-    const formTypeField = (name, value, label = null) => {
-        if (name.startsWith("_comment_")) {
-            return null;
+            await settingsResource.server.update(updated);
+            await fetchSettings();
+            window.flash("Settings saved.", "green");
+        } catch (error) {
+            reportError(error);
         }
+    };
 
+    useEffect(() => { fetchSettings().catch(reportError); }, []);
+
+    const formTypeField = (name, value, label) => {
         switch (typeof value) {
-            case "undefined":
-                break;
-            case "function":
-                break;
-            case "symbol":
-                break;
-            case "bigint":
-                break;
             case "number":
-
-                if(numberInputs.indexOf(name) === -1) {
-                    setNumberInputs(old => [...old, name])
-                }
-
-                return (
-                    <>
-                        <Label htmlFor={name} text={label}/>
-                        <Input type="number" register={register} valueAsNumber="double" defaultValue={value} />
-                    </>
-                )
+                return <>
+                    <Label htmlFor={name} text={label}/>
+                    <Input type="number" step="any" register={register(name, {valueAsNumber: true, validate: Number.isFinite})}/>
+                </>;
             case "string":
-                if (name.includes("password")) {
-                    return (
-                        <>
-                            <Label htmlFor={name} text={label}/>
-                            <InputPassword name={name} register={register} defaultValue={value}/>
-                        </>
-                    )
-                } else {
-                    return (
-                        <>
-                            <Label htmlFor={name} text={label}/>
-                            <Input name={name} register={register} defaultValue={value}/>
-                        </>
-                    )
-                }
+                return <>
+                    <Label htmlFor={name} text={label}/>
+                    {name.includes("password")
+                        ? <InputPassword register={register(name)}/>
+                        : <Input register={register(name)}/>}
+                </>;
             case "boolean":
-                return (
-                    <Checkbox checked={value} text={label} register={register} name={name}/>
-                )
+                return <Checkbox text={label} register={register(name)}/>;
             case "object":
-                if (Array.isArray(value)) {
-                    return (
-                        <>
-                            <Label htmlFor={name} text={label}/>
-                            <Input name={name} register={register} defaultValue={value}/>
-                        </>
-                    )
-                } else if (name.includes("visibility")) {
-                    return (
-                        <>
-                            <Label text="Visibility"/>
-                            <div className="flex">
-                                {Object.keys(value).map(key => <div className="mr-4" key={`visibility-${key}`}>
-                                    <Checkbox checked={value[key]} register={register} text={key} name={`visibility[${key}]`}/>
-                                </div>)}
-                            </div>
-                        </>
-                    )
-                }
-                break;
-            default:
-                return (
-                    <>
+                if (Array.isArray(value) && value.every(item => typeof item === "string")) {
+                    return <>
                         <Label htmlFor={name} text={label}/>
-                        <Input name={name} register={register} defaultValue={value}/>
-                    </>
-                )
+                        <Input register={register(name)}/>
+                    </>;
+                }
+                if (name === "visibility" && value) {
+                    return <>
+                        <Label text="Visibility"/>
+                        <div className="flex">
+                            {Object.keys(value).map(key => <div className="mr-4" key={key}>
+                                <Checkbox register={register(`visibility.${key}`)} text={key}/>
+                            </div>)}
+                        </div>
+                    </>;
+                }
+                return null;
+            default:
+                return null;
         }
-    }
+    };
 
-    return (
-        <form className="mb-4" onSubmit={handleSubmit(saveServerSettings)}>
-            <Panel
-                title="Server Settings"
-                content={
-                    <>
-                        {settings && Object.keys(settings).map(key => {
-                            if (key.startsWith("_comment_")) {
-                                return (
-                                    <div key={key}>
-                                        {formTypeField(key, value)}
-                                    </div>
-                                );
-                            }
-
-                            const value = settings[key]
-                            const label = key.replaceAll('_', ' ')
-                            const comment = settings["_comment_" + key]
-
-                            return (
-                                <div className="mb-4" key={`wrapper-${key}`}>
-                                    {formTypeField(key, value, label)}
-                                    <p className="text-sm italic">{comment}</p>
-                                </div>
-                            )
-                        })}
-                    </>
-                }
-                actions={
-                    <Button isSubmit={true} type="success">Save</Button>
-                }
-            />
-        </form>
-    )
-}
+    return <form className="mb-4" onSubmit={handleSubmit(saveServerSettings,
+        () => window.flash("Check server settings: numeric fields must contain valid numbers.", "red"))}>
+        <Panel title="Server Settings" content={
+            settings && Object.keys(settings).filter(key => !key.startsWith("_comment")).map(key =>
+                <div className="mb-4" key={key}>
+                    {formTypeField(key, settings[key], key.replaceAll("_", " "))}
+                    <p className="text-sm italic">{settings["_comment_" + key]}</p>
+                </div>)
+        } actions={
+            <Button isSubmit={true} type="success" isLoading={isSubmitting} isDisabled={!settings}>Save</Button>
+        }/>
+    </form>;
+};
 
 export default ServerSettings;
