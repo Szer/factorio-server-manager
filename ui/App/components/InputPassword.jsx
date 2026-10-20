@@ -16,7 +16,7 @@ const InputPassword = ({register, defaultValue}) => {
 
     return (
         <div className="flex">
-            <Input type={type} defaultValue={defaultValue} {...register} placeholder="*************"/>
+            <Input type={type} defaultValue={defaultValue} register={register} placeholder="*************"/>
             <div
                 className="accentuated cursor-pointer bg-gray-light flex items-center px-2 text-black"
                 onClick={() => setType(type === "password" ? "text" : "password")}
