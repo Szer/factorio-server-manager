@@ -1,11 +1,17 @@
 # Standalone amd64 manager
 
-`Dockerfile.standalone` bundles Factorio 2.1.22 for Linux amd64, the startup mod
+`Dockerfile.standalone` bundles Factorio for Linux amd64, the startup mod
 settings editor and five minutes of UPS history. The game starts from the UI.
 
 ```sh
-podman build --platform linux/amd64 -f docker/Dockerfile.standalone -t factorio-manager:2.1.22 .
+podman build --platform linux/amd64 -f docker/Dockerfile.standalone -t factorio-manager:local .
 ```
+
+To upgrade the bundled game, change only `ARG FACTORIO_VERSION` in
+`docker/Dockerfile.standalone`. The download, image version label and CI smoke test
+use that value. Merging to `master` builds, tests and publishes the updated image.
+For a local override, pass `--build-arg FACTORIO_VERSION=<version>` and supply the
+same version as the second argument to `docker/smoke-test.sh IMAGE <version>`.
 
 Mount `/opt/fsm-data`, `/opt/factorio/saves`, `/opt/factorio/mods` and
 `/opt/factorio/config` persistently. The entrypoint preserves accounts, credentials,
