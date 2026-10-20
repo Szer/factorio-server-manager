@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/OpenFactorioServerManager/factorio-server-manager/logging"
 	"github.com/OpenFactorioServerManager/factorio-server-manager/telemetry"
 	"log"
 	"net"
@@ -19,6 +20,9 @@ import (
 )
 
 func main() {
+	if err := logging.Configure(os.Getenv("FSM_LOG_LEVEL")); err != nil {
+		log.Fatal(err)
+	}
 	// get the all configs based on the flags
 	config := bootstrap.NewConfig(os.Args[1:])
 

@@ -51,3 +51,21 @@ Use the digest from a successful run in Dockge's `image` field, preserving all
 volumes and configuration. Stop the game before recreating the manager. The new
 container leaves the game stopped until explicitly started in the UI. Rollback
 uses the previous image digest with the same persistent mounts.
+
+## Settings diagnostics
+
+`FSM_LOG_LEVEL` accepts `info` (default, existing logs) or `debug`. In Compose:
+
+```yaml
+environment:
+  - FSM_LOG_LEVEL=debug
+```
+
+Debug logs show settings reads/writes, their source, resolved paths, process UID/GID,
+file and parent directory ownership/modes, and successful byte/field counts.
+Settings values, passwords and tokens are not logged by these diagnostics.
+
+FSM reads `server-settings.json` at manager startup; the settings UI reads its
+in-memory snapshot. Starting the game writes that snapshot back to disk.
+Write failures are always logged, failed API saves return an error to the UI,
+and a failed startup settings write prevents the game from launching.
