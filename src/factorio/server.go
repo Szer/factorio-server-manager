@@ -18,6 +18,7 @@ import (
 
 	"github.com/OpenFactorioServerManager/factorio-server-manager/api/websocket"
 	"github.com/OpenFactorioServerManager/factorio-server-manager/bootstrap"
+	"github.com/OpenFactorioServerManager/factorio-server-manager/logging"
 	"github.com/OpenFactorioServerManager/rcon"
 )
 
@@ -95,6 +96,7 @@ func NewFactorioServer() (err error) {
 	}
 
 	settingsPath := config.SettingsFile
+	DebugSettingsFile("read source=manager-startup", settingsPath)
 	var settings *os.File
 
 	if _, err = os.Stat(settingsPath); os.IsNotExist(err) {
@@ -111,6 +113,7 @@ func NewFactorioServer() (err error) {
 		}
 		defer example.Close()
 
+		DebugSettingsFile("write source=example-settings", settingsPath)
 		settings, err = os.Create(settingsPath)
 		if err != nil {
 			log.Printf("failed to create server settings file: %v", err)
@@ -150,7 +153,9 @@ func NewFactorioServer() (err error) {
 		return
 	}
 
+	DebugSettingsFile("read-complete source=manager-startup", settingsPath)
 	log.Printf("Loaded Factorio settings from %s\n", settingsPath)
+	logging.Debugf("settings read succeeded path=%q fields=%d; UI reads use this in-memory snapshot", settingsPath, len(server.Settings))
 
 	out := []byte{}
 	//Load factorio version
@@ -235,11 +240,8 @@ func (server *Server) Run() error {
 	defer GameFilesMu.Unlock()
 	var err error
 	config := bootstrap.GetConfig()
-	data, err := json.MarshalIndent(server.Settings, "", "  ")
-	if err != nil {
-		log.Println("Failed to marshal FactorioServerSettings: ", err)
-	} else {
-		ioutil.WriteFile(config.SettingsFile, data, 0644)
+	if err := server.writeSettingsForStart(config.SettingsFile); err != nil {
+		return err
 	}
 
 	saves, err := ListSaves()

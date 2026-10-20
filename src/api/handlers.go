@@ -11,11 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/OpenFactorioServerManager/factorio-server-manager/bootstrap"
 	"github.com/OpenFactorioServerManager/factorio-server-manager/factorio"
+	"github.com/OpenFactorioServerManager/factorio-server-manager/logging"
 	"github.com/gorilla/sessions"
 
 	"github.com/gorilla/mux"
@@ -344,17 +344,21 @@ func StartServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
-		err = server.Run()
-		if err != nil {
-			log.Printf("Error starting Factorio server: %+v", err)
-			return
-		}
-	}()
+	runResult := make(chan error, 1)
+	go func() { runResult <- server.Run() }()
 
 	timeout := 0
 	for timeout <= 3 {
-		time.Sleep(1 * time.Second)
+		select {
+		case runErr := <-runResult:
+			if runErr != nil {
+				resp = fmt.Sprintf("Error starting Factorio server: %s", runErr)
+				log.Println(resp)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		case <-time.After(time.Second):
+		}
 		if server.GetRunning() {
 			log.Printf("Running Factorio server detected")
 			break
@@ -366,7 +370,7 @@ func StartServer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if server.GetRunning() == false {
-		resp = fmt.Sprintf("Error starting Factorio server: %s", err)
+		resp = "Factorio server did not report running before the startup timeout; check container logs"
 		log.Println(resp)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -711,6 +715,9 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 // GetServerSettings returns JSON response of server-settings.json file
 func GetServerSettings(w http.ResponseWriter, r *http.Request) {
+	factorio.SettingsMu.Lock()
+	defer factorio.SettingsMu.Unlock()
+	logging.Debugf("settings GET source=memory backing_file=%q; disk is read at manager startup", bootstrap.GetConfig().SettingsFile)
 	var resp interface{}
 
 	defer func() {
@@ -725,6 +732,8 @@ func GetServerSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func UpdateServerSettings(w http.ResponseWriter, r *http.Request) {
+	factorio.SettingsMu.Lock()
+	defer factorio.SettingsMu.Unlock()
 	var resp interface{}
 
 	defer func() {
@@ -740,17 +749,14 @@ func UpdateServerSettings(w http.ResponseWriter, r *http.Request) {
 	log.Println("Received server settings update")
 	var server = factorio.GetFactorioServer()
 
-	// Race Condition while unmarshal possible
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		err = json.Unmarshal(body, &server.Settings)
-		wg.Done()
-	}()
-
-	// Wait for unmarshal to avoid race condition
-	wg.Wait()
+	updated := make(map[string]interface{}, len(server.Settings))
+	for key, value := range server.Settings {
+		updated[key] = value
+	}
+	err = json.Unmarshal(body, &updated)
+	if err == nil && updated == nil {
+		err = errors.New("settings must be a JSON object")
+	}
 
 	if err != nil {
 		resp = fmt.Sprintf("Error unmarhaling server settings JSON: %s", err)
@@ -759,7 +765,7 @@ func UpdateServerSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	settings, err := json.MarshalIndent(&server.Settings, "", "  ")
+	settings, err := json.MarshalIndent(updated, "", "  ")
 	if err != nil {
 		resp = fmt.Sprintf("Failed to marshal server settings: %s", err)
 		log.Println(resp)
@@ -767,7 +773,7 @@ func UpdateServerSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config := bootstrap.GetConfig()
-	err = ioutil.WriteFile(config.SettingsFile, settings, 0644)
+	err = factorio.WriteSettingsFile(config.SettingsFile, settings, 0644, "settings-api")
 	if err != nil {
 		resp = fmt.Sprintf("Failed to save server settings: %v\n", err)
 		log.Println(resp)
@@ -775,20 +781,23 @@ func UpdateServerSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	server.Settings = updated
 	log.Printf("Saved Factorio server settings in server-settings.json")
 
 	if (server.Version.Greater(factorio.Version{0, 17, 0})) {
 		// save admins to adminJson
 		admins, err := json.MarshalIndent(server.Settings["admins"], "", "  ")
 		if err != nil {
-			resp = fmt.Sprintf("Failed to marshal admins-Setting: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			resp = fmt.Sprintf("Server settings saved, but failed to marshal admins: %s", err)
 			log.Println(resp)
 			return
 		}
 
-		err = ioutil.WriteFile(config.FactorioAdminFile, admins, 0664)
+		err = factorio.WriteSettingsFile(config.FactorioAdminFile, admins, 0664, "settings-api-admins")
 		if err != nil {
-			resp = fmt.Sprintf("Failed to save admins: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			resp = fmt.Sprintf("Server settings saved, but failed to save admins: %s", err)
 			log.Println(resp)
 			return
 		}
