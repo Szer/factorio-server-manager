@@ -16,13 +16,14 @@ COPY src ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/factorio-server-manager .
 
 FROM debian:bookworm-slim
+ARG FACTORIO_VERSION=2.1.23
 LABEL org.opencontainers.image.source="https://github.com/Szer/factorio-server-manager"
-LABEL org.opencontainers.image.version="2.1.22"
+LABEL org.opencontainers.image.version="${FACTORIO_VERSION}"
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl xz-utils python3 \
     && rm -rf /var/lib/apt/lists/* \
-    && curl --fail --location --retry 3 https://factorio.com/get-download/2.1.22/headless/linux64 -o /tmp/factorio.tar.xz \
+    && curl --fail --location --retry 3 "https://factorio.com/get-download/${FACTORIO_VERSION}/headless/linux64" -o /tmp/factorio.tar.xz \
     && tar -xJf /tmp/factorio.tar.xz -C /opt && rm /tmp/factorio.tar.xz \
-    && /opt/factorio/bin/x64/factorio --version | grep 'Version: 2.1.22'
+    && /opt/factorio/bin/x64/factorio --version | awk -v expected="$FACTORIO_VERSION" '$1 == "Version:" && $2 == expected { found = 1 } END { exit !found }'
 WORKDIR /opt/fsm
 COPY --from=backend /out/factorio-server-manager ./
 COPY --from=frontend /src/app ./app

@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-image=${1:?Usage: smoke-test.sh IMAGE}
+image=${1:?Usage: smoke-test.sh IMAGE [EXPECTED_VERSION]}
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+expected_version=${2:-$(sed -n 's/^ARG FACTORIO_VERSION=//p' "$script_dir/Dockerfile.standalone")}
+[[ "$expected_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid expected Factorio version'; exit 1; }
 container=""
 trap 'if [[ -n "$container" ]]; then docker rm -f -v "$container" >/dev/null; fi' EXIT
 
-docker run --rm --entrypoint /opt/factorio/bin/x64/factorio "$image" --version | grep -F 'Version: 2.1.22'
+docker run --rm --entrypoint /opt/factorio/bin/x64/factorio "$image" --version | awk -v expected="$expected_version" '$1 == "Version:" && $2 == expected { found = 1 } END { exit !found }'
 container=$(docker run -d -p 127.0.0.1::80 "$image")
 port=$(docker port "$container" 80/tcp)
 ready=false
